@@ -1,0 +1,30 @@
+[package]
+name = "iop-client"
+version = "1.0.0"
+description = "Alibaba Trade SDK for Rust"
+authors = ["cleveng <cleveng@gmail.com>"]
+license = "MIT"
+edition = "2021"
+repository = ""
+rust-version = "1.60.0"
+
+[dependencies]
+reqwest = { version = "0.12.9", features = ["json"] }
+sha2 = "0.10.8"
+hmac = "0.12.1"
+urlencoding = "2.1.3"
+chrono = { version = "0.4.38", features = ["serde"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+
+[build-dependencies]
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
