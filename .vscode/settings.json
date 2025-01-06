@@ -2,6 +2,7 @@
     "cSpell.words": [
         "chrono",
         "hmac",
+        "println",
         "reqwest",
         "urlencoding"
     ]
