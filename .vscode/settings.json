@@ -1,9 +1,11 @@
 {
     "cSpell.words": [
         "chrono",
+        "deadpool",
         "hmac",
         "println",
         "reqwest",
+        "serde",
         "urlencoding"
     ]
 }

@@ -1,20 +1,64 @@
 use chrono::Utc;
+use deadpool_redis::{redis::cmd, Runtime};
 use hmac::{Hmac, Mac};
-use serde::Deserialize;
+use log::info;
+use reqwest::Client;
 use sha2::Sha256;
 use std::collections::HashMap;
 use urlencoding::encode;
 
+mod model;
+
 type HmacSha256 = Hmac<Sha256>;
 
+#[derive(Clone)]
 pub struct IopClient {
     appid: String,
     app_secret: String,
+    pool: deadpool_redis::Pool,
 }
 
 impl IopClient {
-    pub fn new(appid: String, app_secret: String) -> Self {
-        IopClient { appid, app_secret }
+    pub async fn new(
+        appid: String,
+        app_secret: String,
+        redis_addr: String,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let cfg = deadpool_redis::Config::from_url(redis_addr);
+        let pool = match cfg.create_pool(Some(Runtime::Tokio1)) {
+            Ok(pool) => pool,
+            Err(err) => {
+                panic!("Failed to create redis pool: {err}")
+            }
+        };
+
+        match pool.get().await {
+            Ok(mut conn) => {
+                match cmd("SETEX")
+                    .arg("PING")
+                    .arg(5)
+                    .arg("pong")
+                    .query_async::<()>(&mut conn)
+                    .await
+                {
+                    Ok(_) => {
+                        info!("Redis connected");
+                    }
+                    Err(err) => {
+                        panic!("Failed to connect to redis: {err}")
+                    }
+                }
+            }
+            Err(err) => {
+                panic!("Failed to connect to redis: {err}")
+            }
+        };
+
+        Ok(IopClient {
+            appid,
+            app_secret,
+            pool,
+        })
     }
 
     // 获取重定向url
@@ -35,7 +79,7 @@ impl IopClient {
     pub async fn generate_access_token(
         &self,
         code: String,
-    ) -> Result<AccessToken, Box<dyn std::error::Error>> {
+    ) -> Result<model::AccessToken, Box<dyn std::error::Error>> {
         let mut map = HashMap::new();
         let now = Utc::now().timestamp_millis().to_string();
         map.insert("app_key".to_string(), self.appid.to_string());
@@ -51,14 +95,21 @@ impl IopClient {
             hash,
         );
 
-        let data = match reqwest::get(url).await?.json().await {
-            Ok(res) => res,
-            Err(e) => {
-                return Err(Box::new(e));
-            }
-        };
+        let client = Client::new();
+        let response = client.get(&url).send().await?;
+        let at: model::AccessToken = response.json::<model::AccessToken>().await?;
 
-        Ok(data)
+        let key = format!("iop:client:{}:token", self.appid);
+        if let Ok(mut conn) = self.pool.get().await {
+            let _: () = cmd("SET")
+                .arg(&key)
+                .arg(serde_json::to_string(&at).unwrap())
+                .query_async::<()>(&mut conn)
+                .await
+                .unwrap();
+        }
+
+        Ok(at)
     }
 
     fn generate_url(
@@ -111,29 +162,4 @@ impl IopClient {
         let code_bytes = result.into_bytes();
         format!("{:X}", code_bytes)
     }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct CountryUserInfo {
-    #[serde(rename = "aliId")]
-    pub ali_id: String,
-    #[serde(rename = "loginId")]
-    pub login_id: String,
-    pub user_id: String,
-    pub seller_id: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct AccessToken {
-    pub access_token: String,
-    pub country: String,
-    pub refresh_token: String,
-    pub account_platform: String,
-    pub refresh_expires_in: i32,
-    pub country_user_info: CountryUserInfo,
-    pub expires_in: i32,
-    pub account: String,
-    pub code: String,
-    pub request_id: String,
-    pub _trace_id_: String,
 }
