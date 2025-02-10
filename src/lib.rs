@@ -7,6 +7,7 @@ mod constants;
 mod core;
 mod model;
 mod photobank;
+mod product_category;
 mod token;
 
 #[derive(Clone)]
