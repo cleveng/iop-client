@@ -6,6 +6,7 @@ use reqwest::Client;
 mod constants;
 mod core;
 mod model;
+mod photobank;
 mod token;
 
 #[derive(Clone)]
