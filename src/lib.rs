@@ -8,6 +8,8 @@ mod core;
 mod model;
 mod photobank;
 mod product_category;
+mod product_country;
+mod product_group;
 mod token;
 
 #[derive(Clone)]
